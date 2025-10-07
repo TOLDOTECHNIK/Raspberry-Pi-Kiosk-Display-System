@@ -8,7 +8,7 @@ We encourage feedback and pull requests!
 
 ## 🚀 Features
 
-- **Supports almost all Raspberry Pi boards**: Tested with Raspberry Pi 5 and Raspberry Pi Zero 2 W).
+- **Supports almost all Raspberry Pi boards**: Tested with Raspberry Pi 5 and Raspberry Pi Zero 2 W.
 - **3D-accelerated graphics**: Utilizes hardware-accelerated graphics for improved performance in kiosk applications.
 - **Wayland & labwc**: Provides a smooth experience with Wayland display server protocol and labwc compositor.
 - **Chromium in kiosk mode**: Runs Chromium in full-screen kiosk mode, perfect for web-based digital signage. NOTE: Chromium requires at least 1GB of RAM but may still run on lower specifications.
@@ -20,7 +20,7 @@ We encourage feedback and pull requests!
 ## 📋 Requirements
 
 - This setup is compatible with nearly all Raspberry Pi boards (tested on RPi Zero 2 W and RPi 5).
-- A fresh installation of Raspberry Pi OS Bookworm (tested with **2024-10-22-raspios-bookworm-armhf-lite** on Raspberry Pi 5)
+- A fresh installation of Raspberry Pi OS Bookworm / Trixie (tested with **2024-10-22-raspios-bookworm-armhf-lite** on Raspberry Pi 5)
 - Display connected to the first HDMI port (next to the Raspberry Pi 5 USB Type C port)
 
 ## 🛠️ Setup Instructions
@@ -33,6 +33,7 @@ We encourage feedback and pull requests!
    - Copy the `kiosk_setup.sh` script to your running Raspberry Pi.
    - Execute the script (ensure you're not the root user):
      ```bash
+     # su pi
      bash kiosk_setup.sh
      ```
      OR
@@ -49,7 +50,7 @@ We encourage feedback and pull requests!
 
 - **Chromium Kiosk Mode**: By default, Chromium runs in kiosk mode loading a sample page (`https://webglsamples.org/aquarium/aquarium.html`). You can customize this URL in the `~/.config/labwc/autostart` file:
   ```ini
-  /usr/bin/chromium-browser --incognito --autoplay-policy=no-user-gesture-required --kiosk <your-url>
+  /usr/bin/chromium ... --kiosk <your-url>
 - **Resolution Configuration**: The script allows you to set a display resolution (e.g., 1920x1080) for both the labwc compositor and Raspberry Pi boot configuration.
 - **Plymouth Splash Screen**: Optionally install and configure a splash screen to hide boot messages and give your kiosk a clean startup look.
 
