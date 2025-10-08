@@ -9,6 +9,7 @@
 # 2024-11-04 V1.1: Switch from wayfire to labwc
 # 2024-11-13 V1.2: Added setup of wlr-randr
 # 2025-10-07 v1.3: Smart chromium package detection + robustness fixes
+# 2025-10-08 v1.4: Added screen rotation option, network wait before launching browser
 
 # Function to display a spinner with additional message
 spinner() {
@@ -89,7 +90,7 @@ if ask_user "Do you want to install Chromium Browser?"; then
     if [ -z "$CHROMIUM_PKG" ]; then
         echo -e "\e[33mNo chromium package found in APT. You may need to enable the appropriate repository or install manually.\e[0m"
     else
-        echo -e "\e[90mInstalling $CHROMIUM_PKG, please wait...\e[0m"
+        echo -e "\e[90mInstalling $CHROMIUM_PKG. THIS MAY TAKE SOME TIME, please wait...\e[0m"
         sudo apt install --no-install-recommends -y "$CHROMIUM_PKG" > /dev/null 2>&1 &
         spinner $! "Installing $CHROMIUM_PKG..."
     fi
@@ -132,8 +133,34 @@ if ask_user "Do you want to create an autostart (chromium) script for labwc?"; t
     # Ask about incognito mode (default: yes)
     echo
     INCOGNITO_FLAG=""
-    if ask_user "Start browser in incognito mode? [default: yes]"; then
-        INCOGNITO_FLAG="--incognito "
+    while true; do
+        read -p "Start browser in incognito mode? [default: yes] (y/n): " yn
+        # If empty (just Enter pressed), default to yes
+        yn="${yn:-y}"
+        case $yn in
+            [Yy]* ) INCOGNITO_FLAG="--incognito "; break;;
+            [Nn]* ) INCOGNITO_FLAG=""; break;;
+            * ) echo "Please answer yes (y) or no (n).";;
+        esac
+    done
+
+    # Ask about network wait
+    echo
+    NETWORK_WAIT=""
+    if ask_user "Wait for network connectivity before launching Chromium?"; then
+        read -p "Enter host to ping for network check [default: 8.8.8.8]: " PING_HOST
+        PING_HOST="${PING_HOST:-8.8.8.8}"
+        read -p "Enter maximum wait time in seconds [default: 30]: " MAX_WAIT
+        MAX_WAIT="${MAX_WAIT:-30}"
+        
+        NETWORK_WAIT="  # Wait for network connectivity (max ${MAX_WAIT}s)
+  for i in \$(seq 1 $MAX_WAIT); do
+    if ping -c 1 -W 2 $PING_HOST > /dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+"
     fi
 
     LABWC_AUTOSTART_DIR="$HOME_DIR/.config/labwc"
@@ -163,7 +190,19 @@ if ask_user "Do you want to create an autostart (chromium) script for labwc?"; t
         echo "Chromium autostart entry already exists in $LABWC_AUTOSTART_FILE."
     else
         echo -e "\e[90mAdding Chromium to labwc autostart script...\e[0m"
-        echo "$CHROMIUM_BIN ${INCOGNITO_FLAG}--autoplay-policy=no-user-gesture-required --kiosk $USER_URL &" >> "$LABWC_AUTOSTART_FILE"
+        
+        if [ -n "$NETWORK_WAIT" ]; then
+            cat >> "$LABWC_AUTOSTART_FILE" << EOL
+# Launch Chromium in kiosk mode (with network wait)
+(
+$NETWORK_WAIT
+    $CHROMIUM_BIN ${INCOGNITO_FLAG}--autoplay-policy=no-user-gesture-required --kiosk $USER_URL
+) &
+EOL
+        else
+            echo "$CHROMIUM_BIN ${INCOGNITO_FLAG}--autoplay-policy=no-user-gesture-required --kiosk $USER_URL &" >> "$LABWC_AUTOSTART_FILE"
+        fi
+        
         echo -e "\e[32m✔\e[0m labwc autostart script has been created or updated at $LABWC_AUTOSTART_FILE."
     fi
 fi
@@ -209,13 +248,13 @@ if ask_user "Do you want to install the Plymouth splash screen?"; then
     if [ ${#THEMES[@]} -eq 0 ]; then
         echo -e "\e[33mNo Plymouth themes found or plymouth-set-default-theme not available. Skipping theme setup.\e[0m"
     else
-        echo -e "\e[94mPlease choose a theme (enter the number, default: 8 - spinner):\e[0m"
+        echo -e "\e[94mPlease choose a theme (enter the number, default: 1 - bgrt):\e[0m"
         select SELECTED_THEME in "${THEMES[@]}"; do
-            # If user just pressed Enter, use default (option 8)
+            # If user just pressed Enter, use default (option 1)
             if [[ -z "$REPLY" ]]; then
-                SELECTED_THEME="${THEMES[7]}"  # Array index 7 = option 8
+                SELECTED_THEME="${THEMES[0]}"  # Array index 0 = option 1
             fi
-            
+
             if [[ -n "$SELECTED_THEME" ]]; then
                 echo -e "\e[90mSetting Plymouth theme to $SELECTED_THEME...\e[0m"
                 sudo plymouth-set-default-theme "$SELECTED_THEME"
@@ -304,6 +343,35 @@ if ask_user "Do you want to set the screen resolution in cmdline.txt and the lab
         echo -e "\e[32m✔\e[0m Resolution command added to labwc autostart file successfully!"
     else
         echo -e "\e[33mAutostart file already contains this resolution command. No changes made.\e[0m"
+    fi
+fi
+
+# Configure screen orientation
+echo
+if ask_user "Do you want to set the screen orientation (rotation)?"; then
+    echo -e "\e[94mPlease choose an orientation:\e[0m"
+    orientations=("normal (0°)" "90° clockwise" "180°" "270° clockwise")
+    transform_values=("normal" "90" "180" "270")
+    
+    select orientation in "${orientations[@]}"; do
+        if [[ -n "$orientation" ]]; then
+            idx=$((REPLY - 1))
+            TRANSFORM="${transform_values[$idx]}"
+            echo -e "\e[32mYou selected $orientation\e[0m"
+            break
+        else
+            echo -e "\e[33mInvalid selection, please try again.\e[0m"
+        fi
+    done
+    
+    # Add to labwc autostart
+    AUTOSTART_FILE="$HOME_DIR/.config/labwc/autostart"
+    touch "$AUTOSTART_FILE"
+    if ! grep -q "wlr-randr.*--transform" "$AUTOSTART_FILE" 2>/dev/null; then
+        echo "wlr-randr --output HDMI-A-1 --transform $TRANSFORM" >> "$AUTOSTART_FILE"
+        echo -e "\e[32m✔\e[0m Screen orientation added to labwc autostart file successfully!"
+    else
+        echo -e "\e[33mAutostart file already contains a transform command. No changes made.\e[0m"
     fi
 fi
 
