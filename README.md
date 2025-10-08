@@ -7,7 +7,7 @@ Previously, we worked on [**Buildroot-WebKit**](https://github.com/TOLDOTECHNIK/
 We encourage feedback and pull requests!
 
 ## 🚀 Features
-- **Supports almost all Raspberry Pi boards**: Tested with Raspberry Pi 5 and Raspberry Pi Zero 2 W.
+- **Supports almost all Raspberry Pi boards**: Tested with Raspberry Pi 5, Raspberry Pi 4 and Raspberry Pi Zero 2 W.
 - **3D-accelerated graphics**: Utilizes hardware-accelerated graphics for improved performance in kiosk applications.
 - **Wayland & labwc**: Provides a smooth experience with Wayland display server protocol and labwc compositor.
 - **Chromium in kiosk mode**: Runs Chromium in full-screen kiosk mode, perfect for web-based digital signage. NOTE: Chromium requires at least 1GB of RAM but may still run on lower specifications.
