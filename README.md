@@ -7,13 +7,16 @@ Previously, we worked on [**Buildroot-WebKit**](https://github.com/TOLDOTECHNIK/
 We encourage feedback and pull requests!
 
 ## 🚀 Features
-
 - **Supports almost all Raspberry Pi boards**: Tested with Raspberry Pi 5 and Raspberry Pi Zero 2 W.
 - **3D-accelerated graphics**: Utilizes hardware-accelerated graphics for improved performance in kiosk applications.
 - **Wayland & labwc**: Provides a smooth experience with Wayland display server protocol and labwc compositor.
 - **Chromium in kiosk mode**: Runs Chromium in full-screen kiosk mode, perfect for web-based digital signage. NOTE: Chromium requires at least 1GB of RAM but may still run on lower specifications.
-- **Customizable resolution**: Easily configure screen resolutions.
-- **auto-start**: Uses `greetd` to auto-start labwc at boot.
+- **Customizable resolution**: Easily configure screen resolutions based on EDID detection or choose from default options.
+- **Screen rotation**: Configure display orientation (0°, 90°, 180°, 270°) for portrait or landscape modes.
+- **Network wait**: Optionally wait for network connectivity before launching Chromium to ensure webpages load successfully.
+- **Cursor hiding**: Automatically hide the mouse cursor in kiosk mode using labwc's built-in HideCursor action.
+- **Incognito mode**: Option to run Chromium in incognito/private mode.
+- **Auto-start**: Uses `greetd` to auto-start labwc at boot.
 - **Plymouth splash screen**: Optionally configure a custom splash screen for a polished boot experience.
 - **Sound**: Sound has not been tested yet in this setup.
 
