@@ -9,7 +9,7 @@
 # 2024-11-04 V1.1: Switch from wayfire to labwc
 # 2024-11-13 V1.2: Added setup of wlr-randr
 # 2025-10-07 v1.3: Smart chromium package detection + robustness fixes
-# 2025-10-08 v1.4: Added screen rotation option, network wait before launching browser
+# 2025-10-08 v1.4: Added screen rotation option, network wait before launching browser, auto-hide mouse cursor
 
 # Function to display a spinner with additional message
 spinner() {
@@ -204,6 +204,70 @@ EOL
         fi
         
         echo -e "\e[32m✔\e[0m labwc autostart script has been created or updated at $LABWC_AUTOSTART_FILE."
+    fi
+fi
+
+# configure cursor hiding for labwc?
+echo
+if ask_user "Do you want to hide the mouse cursor in kiosk mode?"; then
+    # Install wtype if not present
+    if ! command -v wtype &> /dev/null; then
+        echo -e "\e[90mInstalling wtype for cursor control, please wait...\e[0m"
+        sudo apt install -y wtype > /dev/null 2>&1 &
+        spinner $! "Installing wtype..."
+    fi
+
+    # Create labwc config directory
+    LABWC_CONFIG_DIR="$HOME_DIR/.config/labwc"
+    mkdir -p "$LABWC_CONFIG_DIR"
+    
+    # Create or modify rc.xml
+    RC_XML="$LABWC_CONFIG_DIR/rc.xml"
+    
+    if [ -f "$RC_XML" ]; then
+        # Check if HideCursor already exists
+        if grep -q "HideCursor" "$RC_XML" 2>/dev/null; then
+            echo -e "\e[33mrc.xml already contains HideCursor configuration. No changes made.\e[0m"
+        else
+            echo -e "\e[90mAdding HideCursor keybind to existing rc.xml...\e[0m"
+            # Insert before closing </openbox_config> or </keyboard> tag
+            if grep -q "</keyboard>" "$RC_XML"; then
+                sudo sed -i 's|</keyboard>|  <keybind key="W-h">\n    <action name="HideCursor"/>\n    <action name="WarpCursor" to="output" x="1" y="1"/>\n  </keybind>\n</keyboard>|' "$RC_XML"
+            else
+                echo -e "\e[33mCouldn't find </keyboard> tag in rc.xml. Please add HideCursor keybind manually.\e[0m"
+            fi
+        fi
+    else
+        # Create new rc.xml with HideCursor configuration
+        echo -e "\e[90mCreating rc.xml with HideCursor configuration...\e[0m"
+        cat > "$RC_XML" << 'EOL'
+<?xml version="1.0"?>
+<labwc_config>
+  <keyboard>
+    <keybind key="W-h">
+      <action name="HideCursor"/>
+      <action name="WarpCursor" to="output" x="1" y="1"/>
+    </keybind>
+  </keyboard>
+</labwc_config>
+EOL
+        echo -e "\e[32m✔\e[0m rc.xml created successfully!"
+    fi
+    
+    # Add wtype command to autostart
+    LABWC_AUTOSTART_FILE="$LABWC_CONFIG_DIR/autostart"
+    touch "$LABWC_AUTOSTART_FILE"
+    
+    if grep -q "wtype.*logo.*-k h" "$LABWC_AUTOSTART_FILE" 2>/dev/null; then
+        echo -e "\e[33mAutostart already contains cursor hiding command. No changes made.\e[0m"
+    else
+        echo -e "\e[90mAdding cursor hiding command to autostart...\e[0m"
+        cat >> "$LABWC_AUTOSTART_FILE" << 'EOL'
+
+# Hide cursor on startup (simulate Win+H hotkey)
+sleep 1 && wtype -M logo -k h -m logo &
+EOL
+        echo -e "\e[32m✔\e[0m Cursor hiding configured successfully!"
     fi
 fi
 
