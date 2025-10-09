@@ -10,7 +10,7 @@
 # 2024-11-13 V1.2: Added setup of wlr-randr
 # 2025-10-07 v1.3: Smart chromium package detection + robustness fixes
 # 2025-10-08 v1.4: Added screen rotation option, network wait before launching browser, auto-hide mouse cursor
-# 2025-10-09 v1.5: Added audio to HDMI option
+# 2025-10-09 v1.5: Added audio to HDMI option, splash screen improvements
 
 # Function to display a spinner with additional message
 spinner() {
@@ -78,16 +78,16 @@ if ask_user "Do you want to install Wayland and labwc packages?"; then
 fi
 
 # --- Smart Chromium install + autostart snippet ---
-# detect available chromium package name (prefer 'chromium')
-CHROMIUM_PKG=""
-if apt-cache show chromium >/dev/null 2>&1; then
-    CHROMIUM_PKG="chromium"
-elif apt-cache show chromium-browser >/dev/null 2>&1; then
-    CHROMIUM_PKG="chromium-browser"
-fi
-
 echo
 if ask_user "Do you want to install Chromium Browser?"; then
+    # detect available chromium package name (prefer 'chromium')
+    CHROMIUM_PKG=""
+    if apt-cache show chromium >/dev/null 2>&1; then
+        CHROMIUM_PKG="chromium"
+    elif apt-cache show chromium-browser >/dev/null 2>&1; then
+        CHROMIUM_PKG="chromium-browser"
+    fi
+
     if [ -z "$CHROMIUM_PKG" ]; then
         echo -e "\e[33mNo chromium package found in APT. You may need to enable the appropriate repository or install manually.\e[0m"
     else
@@ -153,7 +153,7 @@ if ask_user "Do you want to create an autostart (chromium) script for labwc?"; t
         PING_HOST="${PING_HOST:-8.8.8.8}"
         read -p "Enter maximum wait time in seconds [default: 30]: " MAX_WAIT
         MAX_WAIT="${MAX_WAIT:-30}"
-        
+
         NETWORK_WAIT="  # Wait for network connectivity (max ${MAX_WAIT}s)
   for i in \$(seq 1 $MAX_WAIT); do
     if ping -c 1 -W 2 $PING_HOST > /dev/null 2>&1; then
@@ -191,7 +191,7 @@ if ask_user "Do you want to create an autostart (chromium) script for labwc?"; t
         echo "Chromium autostart entry already exists in $LABWC_AUTOSTART_FILE."
     else
         echo -e "\e[90mAdding Chromium to labwc autostart script...\e[0m"
-        
+
         if [ -n "$NETWORK_WAIT" ]; then
             cat >> "$LABWC_AUTOSTART_FILE" << EOL
 # Launch Chromium in kiosk mode (with network wait)
@@ -203,7 +203,7 @@ EOL
         else
             echo "$CHROMIUM_BIN ${INCOGNITO_FLAG}--autoplay-policy=no-user-gesture-required --kiosk $USER_URL &" >> "$LABWC_AUTOSTART_FILE"
         fi
-        
+
         echo -e "\e[32m✔\e[0m labwc autostart script has been created or updated at $LABWC_AUTOSTART_FILE."
     fi
 fi
@@ -224,7 +224,7 @@ if ask_user "Do you want to hide the mouse cursor in kiosk mode?"; then
     
     # Create or modify rc.xml
     RC_XML="$LABWC_CONFIG_DIR/rc.xml"
-    
+
     if [ -f "$RC_XML" ]; then
         # Check if HideCursor already exists
         if grep -q "HideCursor" "$RC_XML" 2>/dev/null; then
@@ -254,11 +254,11 @@ if ask_user "Do you want to hide the mouse cursor in kiosk mode?"; then
 EOL
         echo -e "\e[32m✔\e[0m rc.xml created successfully!"
     fi
-    
+
     # Add wtype command to autostart
     LABWC_AUTOSTART_FILE="$LABWC_CONFIG_DIR/autostart"
     touch "$LABWC_AUTOSTART_FILE"
-    
+
     if grep -q "wtype.*logo.*-k h" "$LABWC_AUTOSTART_FILE" 2>/dev/null; then
         echo -e "\e[33mAutostart already contains cursor hiding command. No changes made.\e[0m"
     else
@@ -272,9 +272,36 @@ EOL
     fi
 fi
 
-# install Plymouth splash screen?
+# install splash screen?
 echo
-if ask_user "Do you want to install the Plymouth splash screen?"; then
+if ask_user "Do you want to install the splash screen?"; then
+    # Install Plymouth and themes including pix-plym-splash
+    echo -e "\e[90mInstalling splash screen and themes...\e[0m"
+    sudo apt-get install -y plymouth plymouth-themes pix-plym-splash > /dev/null 2>&1 &
+    spinner $! "Installing splash screen..."
+
+    # Check if pix theme is available
+    if [ ! -e /usr/share/plymouth/themes/pix/pix.script ]; then
+        echo -e "\e[33mWarning: pix theme not found after installation. Splash screen may not work correctly.\e[0m"
+    else
+        echo -e "\e[90mSetting splash screen theme to pix...\e[0m"
+        sudo plymouth-set-default-theme pix
+
+        # Download and replace the splash.png with custom logo
+        echo -e "\e[90mDownloading custom splash logo...\e[0m"
+        SPLASH_URL="https://raw.githubusercontent.com/TOLDOTECHNIK/Raspberry-Pi-Kiosk-Display-System/main/_assets/splashscreens/splash.png"
+        SPLASH_PATH="/usr/share/plymouth/themes/pix/splash.png"
+
+        if sudo wget -q "$SPLASH_URL" -O "$SPLASH_PATH"; then
+            echo -e "\e[32m✔\e[0m Custom splash logo installed."
+        else
+            echo -e "\e[33mWarning: Failed to download custom splash logo. Using default.\e[0m"
+        fi
+
+        sudo update-initramfs -u > /dev/null 2>&1 &
+        spinner $! "Updating initramfs..."
+    fi
+
     CONFIG_TXT="/boot/firmware/config.txt"
     if [ -f "$CONFIG_TXT" ]; then
         if ! grep -q "disable_splash" "$CONFIG_TXT"; then
@@ -292,45 +319,17 @@ if ask_user "Do you want to install the Plymouth splash screen?"; then
         if ! grep -q "splash" "$CMDLINE_TXT"; then
             echo -e "\e[90mAdding quiet splash plymouth.ignore-serial-consoles to $CMDLINE_TXT...\e[0m"
             sudo sed -i 's/$/ quiet splash plymouth.ignore-serial-consoles/' "$CMDLINE_TXT"
-        else
-            echo -e "\e[33m$CMDLINE_TXT already contains splash options. No changes made. Please check manually!\e[0m"
         fi
+        if grep -q "console=tty1" "$CMDLINE_TXT"; then
+            echo -e "\e[90mReplacing console=tty1 with console=tty3 in $CMDLINE_TXT...\e[0m"
+            sudo sed -i 's/console=tty1/console=tty3/' "$CMDLINE_TXT"
+        elif ! grep -q "console=tty3" "$CMDLINE_TXT"; then
+            echo -e "\e[90mAdding console=tty3 to $CMDLINE_TXT...\e[0m"
+            sudo sed -i 's/$/ console=tty3/' "$CMDLINE_TXT"
+        fi
+        echo -e "\e[32m✔\e[0m Splash screen installed and configured with pix theme."
     else
         echo -e "\e[33m$CMDLINE_TXT not found — skipping cmdline.txt modification.\e[0m"
-    fi
-
-    # Install Plymouth and themes
-    echo -e "\e[90mInstalling Plymouth and themes...\e[0m"
-    sudo apt install -y plymouth plymouth-themes > /dev/null 2>&1 &
-    spinner $! "Installing Plymouth..."
-
-    # List available themes and store them in an array
-    THEMES=()
-    if command -v plymouth-set-default-theme >/dev/null 2>&1; then
-        readarray -t THEMES < <(plymouth-set-default-theme -l 2>/dev/null || true)
-    fi
-
-    if [ ${#THEMES[@]} -eq 0 ]; then
-        echo -e "\e[33mNo Plymouth themes found or plymouth-set-default-theme not available. Skipping theme setup.\e[0m"
-    else
-        echo -e "\e[94mPlease choose a theme (enter the number, default: 1 - bgrt):\e[0m"
-        select SELECTED_THEME in "${THEMES[@]}"; do
-            # If user just pressed Enter, use default (option 1)
-            if [[ -z "$REPLY" ]]; then
-                SELECTED_THEME="${THEMES[0]}"  # Array index 0 = option 1
-            fi
-
-            if [[ -n "$SELECTED_THEME" ]]; then
-                echo -e "\e[90mSetting Plymouth theme to $SELECTED_THEME...\e[0m"
-                sudo plymouth-set-default-theme "$SELECTED_THEME"
-                sudo update-initramfs -u > /dev/null 2>&1 &
-                spinner $! "Updating initramfs..."
-                echo -e "\e[32m✔\e[0m Plymouth splash screen installed and configured with $SELECTED_THEME theme."
-                break
-            else
-                echo -e "\e[31mInvalid selection, please try again.\e[0m"
-            fi
-        done
     fi
 fi
 
@@ -417,7 +416,7 @@ if ask_user "Do you want to set the screen orientation (rotation)?"; then
     echo -e "\e[94mPlease choose an orientation:\e[0m"
     orientations=("normal (0°)" "90° clockwise" "180°" "270° clockwise")
     transform_values=("normal" "90" "180" "270")
-    
+
     select orientation in "${orientations[@]}"; do
         if [[ -n "$orientation" ]]; then
             idx=$((REPLY - 1))
@@ -428,7 +427,7 @@ if ask_user "Do you want to set the screen orientation (rotation)?"; then
             echo -e "\e[33mInvalid selection, please try again.\e[0m"
         fi
     done
-    
+
     # Add to labwc autostart
     AUTOSTART_FILE="$HOME_DIR/.config/labwc/autostart"
     touch "$AUTOSTART_FILE"
