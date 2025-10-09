@@ -18,7 +18,7 @@ We encourage feedback and pull requests!
 - **Incognito mode**: Option to run Chromium in incognito/private mode.
 - **Auto-start**: Uses `greetd` to auto-start labwc at boot.
 - **Plymouth splash screen**: Optionally configure a custom splash screen for a polished boot experience.
-- **Sound**: Sound has not been tested yet in this setup.
+- **HDMI audio output**: Option to force audio output through HDMI by disabling onboard audio.
 
 ## 📋 Requirements
 
@@ -58,7 +58,6 @@ We encourage feedback and pull requests!
 - **Plymouth Splash Screen**: Optionally install and configure a splash screen to hide boot messages and give your kiosk a clean startup look.
 
 ## 📝 Known Issues & Future Improvements
-- **Sound** has not yet been tested in this setup.
 - **Tweaking**: This setup is still in development and may exhibit some unexpected behavior.
 
 Please report any issues or suggest enhancements via GitHub issues or pull requests.

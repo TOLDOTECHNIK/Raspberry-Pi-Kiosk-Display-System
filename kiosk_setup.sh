@@ -10,6 +10,7 @@
 # 2024-11-13 V1.2: Added setup of wlr-randr
 # 2025-10-07 v1.3: Smart chromium package detection + robustness fixes
 # 2025-10-08 v1.4: Added screen rotation option, network wait before launching browser, auto-hide mouse cursor
+# 2025-10-09 v1.5: Added audio to HDMI option
 
 # Function to display a spinner with additional message
 spinner() {
@@ -436,6 +437,38 @@ if ask_user "Do you want to set the screen orientation (rotation)?"; then
         echo -e "\e[32m✔\e[0m Screen orientation added to labwc autostart file successfully!"
     else
         echo -e "\e[33mAutostart file already contains a transform command. No changes made.\e[0m"
+    fi
+fi
+
+# Force audio to HDMI?
+echo
+if ask_user "Do you want to force audio output to HDMI?"; then
+    CONFIG_TXT="/boot/firmware/config.txt"
+    if [ -f "$CONFIG_TXT" ]; then
+        # Check if dtparam=audio exists (uncommented)
+        if grep -q "^dtparam=audio=" "$CONFIG_TXT"; then
+            # Check if it's already set to off
+            if grep -q "^dtparam=audio=off" "$CONFIG_TXT"; then
+                echo -e "\e[33m$CONFIG_TXT already has dtparam=audio=off. No changes made.\e[0m"
+            else
+                # Replace existing audio parameter
+                echo -e "\e[90mModifying existing dtparam=audio in $CONFIG_TXT...\e[0m"
+                sudo sed -i 's/^dtparam=audio=.*/dtparam=audio=off/' "$CONFIG_TXT"
+                echo -e "\e[32m✔\e[0m Audio parameter updated to force HDMI output!"
+            fi
+        elif grep -q "^#dtparam=audio=" "$CONFIG_TXT"; then
+            # Uncomment and set to off
+            echo -e "\e[90mUncommenting and setting dtparam=audio=off in $CONFIG_TXT...\e[0m"
+            sudo sed -i 's/^#dtparam=audio=.*/dtparam=audio=off/' "$CONFIG_TXT"
+            echo -e "\e[32m✔\e[0m Audio parameter set to force HDMI output!"
+        else
+            # Add new parameter
+            echo -e "\e[90mAdding dtparam=audio=off to $CONFIG_TXT...\e[0m"
+            sudo bash -c "echo 'dtparam=audio=off' >> '$CONFIG_TXT'"
+            echo -e "\e[32m✔\e[0m Audio parameter added to force HDMI output!"
+        fi
+    else
+        echo -e "\e[33m$CONFIG_TXT not found — skipping audio configuration.\e[0m"
     fi
 fi
 
