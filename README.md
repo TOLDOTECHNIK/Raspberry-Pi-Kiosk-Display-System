@@ -19,6 +19,7 @@ We encourage feedback and pull requests!
 - **Auto-start**: Uses `greetd` to auto-start labwc at boot.
 - **Plymouth splash screen**: Optionally configure a custom splash screen for a polished boot experience.
 - **HDMI audio output**: Option to force audio output through HDMI by disabling onboard audio.
+- **TV Remote Support**: HDMI-CEC control for TV remote compatibility (up/down/left/right/select/...)
 
 ## 📋 Requirements
 
@@ -49,19 +50,17 @@ We encourage feedback and pull requests!
      
      <img src="_assets/SampleTerminalOutput.png" alt="Sample terminal output" width="400"/>
 
+**Note on TV Remote Support:** The HDMI-CEC commands (up/down/left/right/select/enter) are passed directly through to the Chromium browser. The labwc compositor acts as a passthrough layer, forwarding all input events to the browser window without interception. This allows your TV remote to control web page navigation, scroll through content, and interact with web elements as if using a keyboard.
+
 ## ⚙️ Customization Options
 
 - **Chromium Kiosk Mode**: By default, Chromium runs in kiosk mode loading a sample page (`https://webglsamples.org/aquarium/aquarium.html`). You can customize this URL in the `~/.config/labwc/autostart` file:
   ```ini
   /usr/bin/chromium ... --kiosk <your-url>
 - **Resolution Configuration**: The script allows you to set a display resolution (e.g., 1920x1080) for both the labwc compositor and Raspberry Pi boot configuration.
-- **Plymouth Splash Screen**: Optionally install and configure a splash screen to hide boot messages and give your kiosk a clean startup look.
-
-## 📝 Known Issues & Future Improvements
-- **Tweaking**: This setup is still in development and may exhibit some unexpected behavior.
-
-Please report any issues or suggest enhancements via GitHub issues or pull requests.
+- **Custom Splash Screen Image**: Optionally install and configure a splash screen to hide boot messages and give your kiosk a clean startup look. After installation, you can replace the default splash screen by overwriting `/usr/share/plymouth/themes/pix/splash.png` with your own PNG image. For best results, use an image that matches your configured display resolution (e.g., 1920x1080).
 
 ## 🙏 Contribution
+Please report any issues or suggest enhancements via GitHub issues or pull requests.
 
 We welcome feedback, suggestions, and contributions. If you encounter any bugs or have ideas for improvements, feel free to open an issue or submit a pull request.

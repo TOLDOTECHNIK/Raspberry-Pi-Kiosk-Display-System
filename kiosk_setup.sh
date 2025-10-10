@@ -11,6 +11,7 @@
 # 2025-10-07 v1.3: Smart chromium package detection + robustness fixes
 # 2025-10-08 v1.4: Added screen rotation option, network wait before launching browser, auto-hide mouse cursor
 # 2025-10-09 v1.5: Added audio to HDMI option, splash screen improvements
+# 2025-10-10 v1.6: Added TV remote CEC support
 
 # Function to display a spinner with additional message
 spinner() {
@@ -40,11 +41,22 @@ fi
 CURRENT_USER=$(whoami)
 HOME_DIR=$(eval echo "~$CURRENT_USER")
 
-# Function to prompt the user for y/n input
+# Function to prompt the user for y/n input with default value
 ask_user() {
     local prompt="$1"
+    local default="$2"
+    local default_text=""
+    
+    if [ "$default" = "y" ]; then
+        default_text=" [default: yes]"
+    elif [ "$default" = "n" ]; then
+        default_text=" [default: no]"
+    fi
+    
     while true; do
-        read -p "$prompt (y/n): " yn
+        read -p "$prompt$default_text (y/n): " yn
+        # If empty (just Enter pressed), use default
+        yn="${yn:-$default}"
         case $yn in
             [Yy]* ) return 0;;
             [Nn]* ) return 1;;
@@ -55,7 +67,7 @@ ask_user() {
 
 # update the package list?
 echo
-if ask_user "Do you want to update the package list?"; then
+if ask_user "Do you want to update the package list?" "y"; then
     echo -e "\e[90mUpdating the package list, please wait...\e[0m"
     sudo apt update > /dev/null 2>&1 &
     spinner $! "Updating package list..."
@@ -63,7 +75,7 @@ fi
 
 # upgrade installed packages?
 echo
-if ask_user "Do you want to upgrade installed packages?"; then
+if ask_user "Do you want to upgrade installed packages?" "y"; then
     echo -e "\e[90mUpgrading installed packages. THIS MAY TAKE SOME TIME, please wait...\e[0m"
     sudo apt upgrade -y > /dev/null 2>&1 &
     spinner $! "Upgrading installed packages..."
@@ -71,7 +83,7 @@ fi
 
 # install Wayland/labwc packages?
 echo
-if ask_user "Do you want to install Wayland and labwc packages?"; then
+if ask_user "Do you want to install Wayland and labwc packages?" "y"; then
     echo -e "\e[90mInstalling Wayland packages, please wait...\e[0m"
     sudo apt install --no-install-recommends -y labwc wlr-randr seatd > /dev/null 2>&1 &
     spinner $! "Installing Wayland packages..."
@@ -79,7 +91,7 @@ fi
 
 # --- Smart Chromium install + autostart snippet ---
 echo
-if ask_user "Do you want to install Chromium Browser?"; then
+if ask_user "Do you want to install Chromium Browser?" "y"; then
     # detect available chromium package name (prefer 'chromium')
     CHROMIUM_PKG=""
     if apt-cache show chromium >/dev/null 2>&1; then
@@ -99,7 +111,7 @@ fi
 
 # install and configure greetd?
 echo
-if ask_user "Do you want to install and configure greetd for auto start of labwc?"; then
+if ask_user "Do you want to install and configure greetd for auto start of labwc?" "y"; then
     echo -e "\e[90mInstalling greetd for auto start of labwc, please wait...\e[0m"
     sudo apt install -y greetd > /dev/null 2>&1 &
     spinner $! "Installing greetd..."
@@ -127,28 +139,21 @@ fi
 
 # create an autostart script for labwc?
 echo
-if ask_user "Do you want to create an autostart (chromium) script for labwc?"; then
+if ask_user "Do you want to create an autostart (chromium) script for labwc?" "y"; then
     read -p "Enter the URL to open in Chromium [default: https://webglsamples.org...]: " USER_URL
     USER_URL="${USER_URL:-https://webglsamples.org/aquarium/aquarium.html}"
 
-    # Ask about incognito mode (default: yes)
+    # Ask about incognito mode (default: no)
     echo
     INCOGNITO_FLAG=""
-    while true; do
-        read -p "Start browser in incognito mode? [default: yes] (y/n): " yn
-        # If empty (just Enter pressed), default to yes
-        yn="${yn:-y}"
-        case $yn in
-            [Yy]* ) INCOGNITO_FLAG="--incognito "; break;;
-            [Nn]* ) INCOGNITO_FLAG=""; break;;
-            * ) echo "Please answer yes (y) or no (n).";;
-        esac
-    done
+    if ask_user "Start browser in incognito mode?" "n"; then
+        INCOGNITO_FLAG="--incognito "
+    fi
 
-    # Ask about network wait
+    # Ask about network wait (default: no)
     echo
     NETWORK_WAIT=""
-    if ask_user "Wait for network connectivity before launching Chromium?"; then
+    if ask_user "Wait for network connectivity before launching Chromium?" "n"; then
         read -p "Enter host to ping for network check [default: 8.8.8.8]: " PING_HOST
         PING_HOST="${PING_HOST:-8.8.8.8}"
         read -p "Enter maximum wait time in seconds [default: 30]: " MAX_WAIT
@@ -210,7 +215,7 @@ fi
 
 # configure cursor hiding for labwc?
 echo
-if ask_user "Do you want to hide the mouse cursor in kiosk mode?"; then
+if ask_user "Do you want to hide the mouse cursor in kiosk mode?" "y"; then
     # Install wtype if not present
     if ! command -v wtype &> /dev/null; then
         echo -e "\e[90mInstalling wtype for cursor control, please wait...\e[0m"
@@ -274,9 +279,9 @@ fi
 
 # install splash screen?
 echo
-if ask_user "Do you want to install the splash screen?"; then
+if ask_user "Do you want to install the splash screen?" "y"; then
     # Install Plymouth and themes including pix-plym-splash
-    echo -e "\e[90mInstalling splash screen and themes...\e[0m"
+    echo -e "\e[90mInstalling splash screen and themes. THIS MAY TAKE SOME TIME, please wait...\e[0m"
     sudo apt-get install -y plymouth plymouth-themes pix-plym-splash > /dev/null 2>&1 &
     spinner $! "Installing splash screen..."
 
@@ -335,7 +340,7 @@ fi
 
 # Configure a resolution
 echo
-if ask_user "Do you want to set the screen resolution in cmdline.txt and the labwc autostart file?"; then
+if ask_user "Do you want to set the screen resolution in cmdline.txt and the labwc autostart file?" "y"; then
 
     # Check if edid-decode is installed; if not, install it
     if ! command -v edid-decode &> /dev/null; then
@@ -412,7 +417,7 @@ fi
 
 # Configure screen orientation
 echo
-if ask_user "Do you want to set the screen orientation (rotation)?"; then
+if ask_user "Do you want to set the screen orientation (rotation)?" "n"; then
     echo -e "\e[94mPlease choose an orientation:\e[0m"
     orientations=("normal (0°)" "90° clockwise" "180°" "270° clockwise")
     transform_values=("normal" "90" "180" "270")
@@ -441,7 +446,7 @@ fi
 
 # Force audio to HDMI?
 echo
-if ask_user "Do you want to force audio output to HDMI?"; then
+if ask_user "Do you want to force audio output to HDMI?" "y"; then
     CONFIG_TXT="/boot/firmware/config.txt"
     if [ -f "$CONFIG_TXT" ]; then
         # Check if dtparam=audio exists (uncommented)
@@ -471,10 +476,76 @@ if ask_user "Do you want to force audio output to HDMI?"; then
     fi
 fi
 
+# Enable TV remote CEC support?
+echo
+if ask_user "Do you want to enable TV remote control via HDMI-CEC?" "n"; then
+    echo -e "\e[90mInstalling CEC utilities, please wait...\e[0m"
+    sudo apt-get install -y ir-keytable > /dev/null 2>&1 &
+    spinner $! "Installing CEC utilities..."
+
+    # Create custom CEC keymap directory
+    echo -e "\e[90mCreating custom CEC keymap...\e[0m"
+    sudo mkdir -p /etc/rc_keymaps
+
+    # Create custom keymap file
+    sudo bash -c "cat > /etc/rc_keymaps/custom-cec.toml" << 'EOL'
+[[protocols]]
+name = "custom_cec"
+protocol = "cec"
+[protocols.scancodes]
+0x00 = "KEY_ENTER"
+0x01 = "KEY_UP"
+0x02 = "KEY_DOWN"
+0x03 = "KEY_LEFT"
+0x04 = "KEY_RIGHT"
+0x09 = "KEY_EXIT"
+0x0d = "KEY_BACK"
+0x44 = "KEY_PLAYPAUSE"
+0x45 = "KEY_STOPCD"
+0x46 = "KEY_PAUSECD"
+EOL
+
+    echo -e "\e[32m✔\e[0m Custom CEC keymap created!"
+
+    # Create systemd service for CEC setup
+    echo -e "\e[90mCreating CEC setup service...\e[0m"
+    sudo bash -c "cat > /etc/systemd/system/cec-setup.service" << 'EOL'
+[Unit]
+Description=CEC Remote Control Setup
+After=multi-user.target
+Before=graphical.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/cec-ctl -d /dev/cec0 --playback
+ExecStart=/usr/bin/ir-keytable -c -s rc0 -w /etc/rc_keymaps/custom-cec.toml
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+    # Enable the service
+    echo -e "\e[90mEnabling CEC setup service...\e[0m"
+    sudo systemctl daemon-reload > /dev/null 2>&1
+    sudo systemctl enable cec-setup.service > /dev/null 2>&1 &
+    spinner $! "Enabling CEC service..."
+
+    echo -e "\e[32m✔\e[0m TV remote CEC support configured successfully!"
+    echo -e "\e[90mNote: Make sure HDMI-CEC (SimpLink/Anynet+/Bravia Sync) is enabled on your TV.\e[0m"
+fi
+
 # cleaning up apt caches
 echo -e "\e[90mCleaning up apt caches, please wait...\e[0m"
 sudo apt clean > /dev/null 2>&1 &
 spinner $! "Cleaning up apt caches..."
 
-# Print completion message
-echo -e "\e[32m✔\e[0m \e[32mSetup completed successfully! Please reboot your system.\e[0m"
+# Print completion message and ask for reboot
+echo -e "\e[32m✔\e[0m \e[32mSetup completed successfully!\e[0m"
+echo
+if ask_user "Do you want to reboot now?" "n"; then
+    echo -e "\e[90mRebooting system...\e[0m"
+    sudo reboot
+else
+    echo -e "\e[33mPlease remember to reboot your system manually for all changes to take effect.\e[0m"
+fi
