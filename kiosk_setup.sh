@@ -517,7 +517,10 @@ Before=graphical.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/cec-ctl -d /dev/cec0 --playback
+ExecStart=/usr/bin/cec-ctl -d /dev/cec1 --playback
+ExecStart=/bin/sleep 2
+ExecStart=/usr/bin/cec-ctl -d /dev/cec1 --active-source phys-addr=1.0.0.0
+ExecStart=/bin/sleep 1
 ExecStart=/usr/bin/ir-keytable -c -s rc0 -w /etc/rc_keymaps/custom-cec.toml
 RemainAfterExit=yes
 
