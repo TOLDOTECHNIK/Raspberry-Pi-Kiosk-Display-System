@@ -202,11 +202,11 @@ if ask_user "Do you want to create an autostart (chromium) script for labwc?" "y
 # Launch Chromium in kiosk mode (with network wait)
 (
 $NETWORK_WAIT
-    $CHROMIUM_BIN ${INCOGNITO_FLAG}--autoplay-policy=no-user-gesture-required --kiosk $USER_URL
+    $CHROMIUM_BIN ${INCOGNITO_FLAG}--autoplay-policy=no-user-gesture-required --kiosk --no-memcheck $USER_URL
 ) &
 EOL
         else
-            echo "$CHROMIUM_BIN ${INCOGNITO_FLAG}--autoplay-policy=no-user-gesture-required --kiosk $USER_URL &" >> "$LABWC_AUTOSTART_FILE"
+            echo "$CHROMIUM_BIN ${INCOGNITO_FLAG}--autoplay-policy=no-user-gesture-required --kiosk --no-memcheck $USER_URL &" >> "$LABWC_AUTOSTART_FILE"
         fi
 
         echo -e "\e[32m✔\e[0m labwc autostart script has been created or updated at $LABWC_AUTOSTART_FILE."
