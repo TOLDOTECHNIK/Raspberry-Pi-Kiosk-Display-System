@@ -12,6 +12,9 @@
 # 2025-10-08 v1.4: Added screen rotation option, network wait before launching browser, auto-hide mouse cursor
 # 2025-10-09 v1.5: Added audio to HDMI option, splash screen improvements
 # 2025-10-10 v1.6: Added TV remote CEC support
+# 2026-02-06 v1.7: Added --no-memcheck option to chromium
+# 2026-07-13 v1.8: Added HDMI/DSI selection
+# 2026-07-13 v1.9: Manual display-output selection and common DSI resolution presets
 
 # Function to display a spinner with additional message
 spinner() {
@@ -338,86 +341,168 @@ if ask_user "Do you want to install the splash screen?" "y"; then
     fi
 fi
 
+# Select display output manually when required
+select_display_output() {
+    if [ -n "${DISPLAY_OUTPUT:-}" ]; then
+        return 0
+    fi
+
+    echo -e "\e[94mPlease choose the connected display output:\e[0m"
+    display_options=(
+        "HDMI-A-1 (first HDMI port)"
+        "HDMI-A-2 (second HDMI port)"
+        "DSI-1 (first DSI display)"
+        "DSI-2 (second DSI display)"
+        "Enter output name manually"
+    )
+    display_values=("HDMI-A-1" "HDMI-A-2" "DSI-1" "DSI-2" "manual")
+
+    select display_option in "${display_options[@]}"; do
+        if [[ -n "$display_option" ]]; then
+            idx=$((REPLY - 1))
+            DISPLAY_OUTPUT="${display_values[$idx]}"
+
+            if [ "$DISPLAY_OUTPUT" = "manual" ]; then
+                while true; do
+                    read -r -p "Enter the output name exactly as shown by wlr-randr [example: DSI-1]: " DISPLAY_OUTPUT
+                    if [[ "$DISPLAY_OUTPUT" =~ ^[A-Za-z0-9._-]+$ ]]; then
+                        break
+                    fi
+                    echo -e "\e[33mInvalid output name. Use only letters, numbers, dots, underscores and hyphens.\e[0m"
+                done
+            fi
+
+            echo -e "\e[32mYou selected $DISPLAY_OUTPUT\e[0m"
+            break
+        else
+            echo -e "\e[33mInvalid selection, please try again.\e[0m"
+        fi
+    done
+}
+
 # Configure a resolution
 echo
 if ask_user "Do you want to set the screen resolution in cmdline.txt and the labwc autostart file?" "y"; then
-
-    # Check if edid-decode is installed; if not, install it
-    if ! command -v edid-decode &> /dev/null; then
-        echo -e "\e[90mInstalling required tool edid-decode, please wait...\e[0m"
-        sudo apt install -y edid-decode > /dev/null 2>&1 &
-        spinner $! "Installing edid-decode..."
-        echo -e "\e[32mrequired tool installed successfully!\e[0m"
-    fi
-
-    # Try to read EDID; many Pi setups use /sys/class/drm/card1-HDMI-A-1/edid or card0
-    EDID_PATH=""
-    if [ -r /sys/class/drm/card1-HDMI-A-1/edid ]; then
-        EDID_PATH="/sys/class/drm/card1-HDMI-A-1/edid"
-    elif [ -r /sys/class/drm/card0-HDMI-A-1/edid ]; then
-        EDID_PATH="/sys/class/drm/card0-HDMI-A-1/edid"
-    fi
-
+    select_display_output
     available_resolutions=()
 
-    if [ -n "$EDID_PATH" ]; then
-        edid_output=$(sudo cat "$EDID_PATH" | edid-decode 2>/dev/null || true)
-        while IFS= read -r line; do
-            if [[ "$line" =~ ([0-9]+)x([0-9]+)[[:space:]]+([0-9]+\.[0-9]+|[0-9]+)\ Hz ]]; then
-                resolution="${BASH_REMATCH[1]}x${BASH_REMATCH[2]}"
-                frequency="${BASH_REMATCH[3]}"
-                formatted="${resolution}@${frequency}"
-                available_resolutions+=("$formatted")
+    if [[ "$DISPLAY_OUTPUT" == HDMI-* ]]; then
+        # HDMI: try to read the monitor's EDID first.
+        if ! command -v edid-decode &> /dev/null; then
+            echo -e "\e[90mInstalling required tool edid-decode, please wait...\e[0m"
+            sudo apt install -y edid-decode > /dev/null 2>&1 &
+            spinner $! "Installing edid-decode..."
+            echo -e "\e[32mRequired tool installed successfully!\e[0m"
+        fi
+
+        EDID_PATH=""
+        for card in /sys/class/drm/card*-"$DISPLAY_OUTPUT"; do
+            if [ -r "$card/edid" ]; then
+                EDID_PATH="$card/edid"
+                break
             fi
-        done <<< "$edid_output"
+        done
+
+        if [ -n "$EDID_PATH" ]; then
+            edid_output=$(cat "$EDID_PATH" | edid-decode 2>/dev/null || true)
+            while IFS= read -r line; do
+                if [[ "$line" =~ ([0-9]+)x([0-9]+)[[:space:]]+([0-9]+\.[0-9]+|[0-9]+)[[:space:]]Hz ]]; then
+                    resolution="${BASH_REMATCH[1]}x${BASH_REMATCH[2]}"
+                    frequency="${BASH_REMATCH[3]}"
+                    formatted="${resolution}@${frequency}"
+                    if [[ ! " ${available_resolutions[*]} " =~ " ${formatted} " ]]; then
+                        available_resolutions+=("$formatted")
+                    fi
+                fi
+            done <<< "$edid_output"
+        fi
+
+        if [ ${#available_resolutions[@]} -eq 0 ]; then
+            echo -e "\e[33mNo resolutions found via EDID. Using common HDMI resolutions.\e[0m"
+            available_resolutions=(
+                "1920x1080@60"
+                "1600x900@60"
+                "1366x768@60"
+                "1280x720@60"
+                "1024x768@60"
+                "800x600@60"
+            )
+        fi
+    else
+        # DSI panels usually do not provide a standard HDMI-style EDID.
+        # Offer common native resolutions used by Raspberry Pi and generic DSI displays.
+        echo -e "\e[90mUsing a list of common DSI display resolutions. Choose the native resolution of your panel.\e[0m"
+        available_resolutions=(
+            "800x480@60 (Official Raspberry Pi 7-inch Touch Display v1 / common 5-7 inch)"
+            "1024x600@60 (common 7-inch DSI display)"
+            "720x1280@60 (Official Raspberry Pi Touch Display 2 native portrait resolution)"
+            "1280x720@60 (Touch Display 2 in landscape / common HD panel)"
+            "1280x800@60 (common 7-10.1 inch DSI display)"
+            "1920x1080@60 (common Full-HD DSI display)"
+            "720x720@60 (square DSI display)"
+            "480x800@60 (portrait DSI display)"
+            "600x1024@60 (portrait 7-inch DSI display)"
+            "Enter a custom resolution"
+        )
     fi
 
-    # Fallback to default list if no resolutions are found
-    if [ ${#available_resolutions[@]} -eq 0 ]; then
-        echo -e "\e[33mNo resolutions found via EDID. Using default list.\e[0m"
-        available_resolutions=("1920x1080@60" "1280x720@60" "1024x768@60" "1600x900@60" "1366x768@60")
-    fi
-
-    # Prompt user to choose a resolution
     echo -e "\e[94mPlease choose a resolution (type in the number):\e[0m"
-    select RESOLUTION in "${available_resolutions[@]}"; do
-        if [[ -n "$RESOLUTION" ]]; then
-            echo -e "\e[32mYou selected $RESOLUTION\e[0m"
+    select RESOLUTION_CHOICE in "${available_resolutions[@]}"; do
+        if [[ -n "$RESOLUTION_CHOICE" ]]; then
+            if [ "$RESOLUTION_CHOICE" = "Enter a custom resolution" ]; then
+                while true; do
+                    read -r -p "Enter resolution as WIDTHxHEIGHT@REFRESH [example: 1024x600@60]: " RESOLUTION
+                    if [[ "$RESOLUTION" =~ ^[0-9]+x[0-9]+@[0-9]+([.][0-9]+)?$ ]]; then
+                        break
+                    fi
+                    echo -e "\e[33mInvalid format. Example: 1024x600@60\e[0m"
+                done
+            else
+                # Remove the explanatory text after the first space.
+                RESOLUTION="${RESOLUTION_CHOICE%% *}"
+            fi
+            echo -e "\e[32mYou selected $RESOLUTION for $DISPLAY_OUTPUT\e[0m"
             break
         else
             echo -e "\e[33mInvalid selection, please try again.\e[0m"
         fi
     done
 
-    # Add the selected resolution to /boot/firmware/cmdline.txt if not already present
     CMDLINE_FILE="/boot/firmware/cmdline.txt"
     if [ -f "$CMDLINE_FILE" ]; then
-        if ! grep -q "video=" "$CMDLINE_FILE"; then
-            echo -e "\e[90mAdding video=HDMI-A-1:$RESOLUTION to $CMDLINE_FILE...\e[0m"
-            # Prepend video=... at start of single-line cmdline.txt
-            sudo sed -i "1s/^/video=HDMI-A-1:$RESOLUTION /" "$CMDLINE_FILE"
-            echo -e "\e[32m✔\e[0m Resolution added to cmdline.txt successfully!"
+        VIDEO_SETTING="video=${DISPLAY_OUTPUT}:${RESOLUTION}"
+
+        if grep -qE "(^|[[:space:]])video=${DISPLAY_OUTPUT}:" "$CMDLINE_FILE"; then
+            echo -e "\e[90mUpdating the existing $DISPLAY_OUTPUT video entry in $CMDLINE_FILE...\e[0m"
+            sudo sed -E -i "s#(^|[[:space:]])video=${DISPLAY_OUTPUT}:[^[:space:]]+#\\1${VIDEO_SETTING}#" "$CMDLINE_FILE"
+            echo -e "\e[32m✔\e[0m Resolution entry updated successfully!"
         else
-            echo -e "\e[33mcmdline.txt already contains a video entry. No changes made.\e[0m"
+            echo -e "\e[90mAdding $VIDEO_SETTING to $CMDLINE_FILE...\e[0m"
+            sudo sed -i "1s#^#${VIDEO_SETTING} #" "$CMDLINE_FILE"
+            echo -e "\e[32m✔\e[0m Resolution added to cmdline.txt successfully!"
         fi
     else
         echo -e "\e[33m$CMDLINE_FILE not found — skipping cmdline modification.\e[0m"
     fi
 
-    # Add the command to labwc autostart if not present
     AUTOSTART_FILE="$HOME_DIR/.config/labwc/autostart"
+    mkdir -p "$(dirname "$AUTOSTART_FILE")"
     touch "$AUTOSTART_FILE"
-    if ! grep -q "wlr-randr --output HDMI-A-1 --mode $RESOLUTION" "$AUTOSTART_FILE" 2>/dev/null; then
-        echo "wlr-randr --output HDMI-A-1 --mode $RESOLUTION" >> "$AUTOSTART_FILE"
-        echo -e "\e[32m✔\e[0m Resolution command added to labwc autostart file successfully!"
+
+    if grep -qE "^[[:space:]]*wlr-randr --output ${DISPLAY_OUTPUT} --mode " "$AUTOSTART_FILE" 2>/dev/null; then
+        sed -E -i "s#^[[:space:]]*wlr-randr --output ${DISPLAY_OUTPUT} --mode .*#wlr-randr --output ${DISPLAY_OUTPUT} --mode ${RESOLUTION}#" "$AUTOSTART_FILE"
+        echo -e "\e[32m✔\e[0m Existing resolution command updated in labwc autostart."
     else
-        echo -e "\e[33mAutostart file already contains this resolution command. No changes made.\e[0m"
+        echo "wlr-randr --output $DISPLAY_OUTPUT --mode $RESOLUTION" >> "$AUTOSTART_FILE"
+        echo -e "\e[32m✔\e[0m Resolution command added to labwc autostart file successfully!"
     fi
 fi
 
 # Configure screen orientation
 echo
 if ask_user "Do you want to set the screen orientation (rotation)?" "n"; then
+    select_display_output
+
     echo -e "\e[94mPlease choose an orientation:\e[0m"
     orientations=("normal (0°)" "90° clockwise" "180°" "270° clockwise")
     transform_values=("normal" "90" "180" "270")
@@ -426,21 +511,23 @@ if ask_user "Do you want to set the screen orientation (rotation)?" "n"; then
         if [[ -n "$orientation" ]]; then
             idx=$((REPLY - 1))
             TRANSFORM="${transform_values[$idx]}"
-            echo -e "\e[32mYou selected $orientation\e[0m"
+            echo -e "\e[32mYou selected $orientation for $DISPLAY_OUTPUT\e[0m"
             break
         else
             echo -e "\e[33mInvalid selection, please try again.\e[0m"
         fi
     done
 
-    # Add to labwc autostart
     AUTOSTART_FILE="$HOME_DIR/.config/labwc/autostart"
+    mkdir -p "$(dirname "$AUTOSTART_FILE")"
     touch "$AUTOSTART_FILE"
-    if ! grep -q "wlr-randr.*--transform" "$AUTOSTART_FILE" 2>/dev/null; then
-        echo "wlr-randr --output HDMI-A-1 --transform $TRANSFORM" >> "$AUTOSTART_FILE"
-        echo -e "\e[32m✔\e[0m Screen orientation added to labwc autostart file successfully!"
+
+    if grep -qE "^[[:space:]]*wlr-randr --output ${DISPLAY_OUTPUT} --transform " "$AUTOSTART_FILE" 2>/dev/null; then
+        sed -E -i "s#^[[:space:]]*wlr-randr --output ${DISPLAY_OUTPUT} --transform .*#wlr-randr --output ${DISPLAY_OUTPUT} --transform ${TRANSFORM}#" "$AUTOSTART_FILE"
+        echo -e "\e[32m✔\e[0m Existing screen orientation updated in labwc autostart."
     else
-        echo -e "\e[33mAutostart file already contains a transform command. No changes made.\e[0m"
+        echo "wlr-randr --output $DISPLAY_OUTPUT --transform $TRANSFORM" >> "$AUTOSTART_FILE"
+        echo -e "\e[32m✔\e[0m Screen orientation added to labwc autostart file successfully!"
     fi
 fi
 

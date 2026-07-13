@@ -20,6 +20,7 @@ We encourage feedback and pull requests!
 - **Plymouth splash screen**: Optionally configure a custom splash screen for a polished boot experience.
 - **HDMI audio output**: Option to force audio output through HDMI by disabling onboard audio.
 - **TV Remote Support**: HDMI-CEC control for TV remote compatibility (up/down/left/right/select/...)
+- ** HDMI/DSI selection**: Select the connected display output manually and choose from a list of common resolutions.
 
 ## 📋 Requirements
 
@@ -41,7 +42,10 @@ We encourage feedback and pull requests!
      bash kiosk_setup.sh
      ```
      OR
-   - simply run `bash <(curl -s https://raw.githubusercontent.com/TOLDOTECHNIK/Raspberry-Pi-Kiosk-Display-System/main/kiosk_setup.sh)`
+   - simply run
+     ```
+     bash <(curl -s https://raw.githubusercontent.com/TOLDOTECHNIK/Raspberry-Pi-Kiosk-Display-System/main/kiosk_setup.sh)
+     ```
 
 
 3. **Follow the On-Screen Prompts:**
